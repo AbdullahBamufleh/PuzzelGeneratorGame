@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sliding Puzzle Generator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f3f3f3;
+    }
+    #controls {
+      margin: 20px;
+    }
+    #game {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 20px;
+    }
+    canvas {
+      border: 3px solid #333;
+      cursor: pointer;
+    }
+    #original {
+      border: 2px solid #555;
+      max-width: 500px;
+      max-height: 500px;
+    }
+    #message {
+      font-size: 24px;
+      font-weight: bold;
+      color: green;
+      margin-top: 20px;
+      display: none;
+      animation: flash 1s infinite alternate;
+    }
+    @keyframes flash {
+      from { color: green; transform: scale(1); }
+      to { color: red; transform: scale(1.2); }
+    }
+    .win {
+      animation: borderFlash 1s infinite alternate;
+    }
+    @keyframes borderFlash {
+      from { border-color: green; }
+      to { border-color: gold; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Sliding Image Puzzle</h1>
+  <div id="controls">
+    <input type="file" id="imageInput" accept="image/*">
+    <label>Grid size: 
+      <input type="number" id="gridSize" value="3" min="2" max="10">
+    </label>
+    <button id="generateBtn">Generate Puzzle</button>
+  </div>
+
+  <div id="game">
+    <canvas id="puzzleCanvas" width="500" height="500"></canvas>
+    <img id="original" alt="Original Image">
+  </div>
+
+  <div id="message">🎉 You Win! 🎉</div>
+
+  <script>
+    const canvas = document.getElementById("puzzleCanvas");
+    const ctx = canvas.getContext("2d");
+    const originalImg = document.getElementById("original");
+    const message = document.getElementById("message");
+
+    let image = new Image();
+    let gridSize = 3;
+    let tiles = [];
+    let tileSize;
+
+    document.getElementById("generateBtn").addEventListener("click", () => {
+      gridSize = parseInt(document.getElementById("gridSize").value);
+      if (!image.src) return alert("Please choose an image first.");
+      initPuzzle();
+    });
+
+    document.getElementById("imageInput").addEventListener("change", e => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = evt => {
+          image.onload = () => {
+            originalImg.src = image.src;
+            initPuzzle();
+          };
+          image.src = evt.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    function initPuzzle() {
+      tileSize = canvas.width / gridSize;
+      tiles = [];
+
+      // Fill in solved positions
+      for (let row = 0; row < gridSize; row++) {
+        for (let col = 0; col < gridSize; col++) {
+          tiles.push({ row, col });
+        }
+      }
+
+      tiles[tiles.length - 1] = null; // empty tile
+      shuffleSolvable(300); // perform 300 random moves
+      drawPuzzle();
+      message.style.display = "none";
+      canvas.classList.remove("win");
+    }
+
+    // Shuffle by making valid random moves
+    function shuffleSolvable(moves) {
+      for (let i = 0; i < moves; i++) {
+        const emptyIndex = tiles.findIndex(t => t === null);
+        const emptyRow = Math.floor(emptyIndex / gridSize);
+        const emptyCol = emptyIndex % gridSize;
+
+        const neighbors = [];
+        if (emptyRow > 0) neighbors.push({ row: emptyRow - 1, col: emptyCol });
+        if (emptyRow < gridSize - 1) neighbors.push({ row: emptyRow + 1, col: emptyCol });
+        if (emptyCol > 0) neighbors.push({ row: emptyRow, col: emptyCol - 1 });
+        if (emptyCol < gridSize - 1) neighbors.push({ row: emptyRow, col: emptyCol + 1 });
+
+        const choice = neighbors[Math.floor(Math.random() * neighbors.length)];
+        const clickedIndex = choice.row * gridSize + choice.col;
+        tiles[emptyIndex] = tiles[clickedIndex];
+        tiles[clickedIndex] = null;
+      }
+    }
+
+    function drawPuzzle() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      tiles.forEach((tile, index) => {
+        const row = Math.floor(index / gridSize);
+        const col = index % gridSize;
+        if (tile) {
+          ctx.drawImage(
+            image,
+            tile.col * tileSize, tile.row * tileSize, tileSize, tileSize,
+            col * tileSize, row * tileSize, tileSize, tileSize
+          );
+        } else {
+          ctx.fillStyle = "#ccc";
+          ctx.fillRect(col * tileSize, row * tileSize, tileSize, tileSize);
+        }
+      });
+    }
+
+    canvas.addEventListener("click", e => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const col = Math.floor(x / tileSize);
+      const row = Math.floor(y / tileSize);
+      moveTile(row, col);
+    });
+
+    function moveTile(row, col) {
+      const clickedIndex = row * gridSize + col;
+      const emptyIndex = tiles.findIndex(t => t === null);
+      const emptyRow = Math.floor(emptyIndex / gridSize);
+      const emptyCol = emptyIndex % gridSize;
+
+      if ((row === emptyRow && Math.abs(col - emptyCol) === 1) ||
+          (col === emptyCol && Math.abs(row - emptyRow) === 1)) {
+        tiles[emptyIndex] = tiles[clickedIndex];
+        tiles[clickedIndex] = null;
+        drawPuzzle();
+        checkWin();
+      }
+    }
+
+    function checkWin() {
+      for (let i = 0; i < tiles.length - 1; i++) {
+        const row = Math.floor(i / gridSize);
+        const col = i % gridSize;
+        if (!tiles[i] || tiles[i].row !== row || tiles[i].col !== col) {
+          return false;
+        }
+      }
+      // Win animation
+      message.style.display = "block";
+      canvas.classList.add("win");
+      return true;
+    }
+  </script>
+</body>
+</html>
